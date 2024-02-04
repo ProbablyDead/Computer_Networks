@@ -158,7 +158,7 @@ public class Client {
     try {
       FileWriter writer = new FileWriter(file);
 
-      String resultString = "";
+      String resultString = "Bytes\tTime(ns)\n";
 
       for (Pair<Integer, Long> res : result) {
         resultString += res.getKey() + "\t" + res.getValue() + "\n";

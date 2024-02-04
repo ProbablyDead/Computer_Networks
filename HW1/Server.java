@@ -84,8 +84,7 @@ public class Server {
         out = new PrintWriter(clientSocket.getOutputStream(), true);
 
         // Receive until null
-        String receivedString;
-        while ((receivedString = in.readLine()) != null) {
+        while (in.readLine() != null) {
           out.write(LocalDateTime.now().format(dateTimeFormatter) + "\n");
           out.flush();
         }
