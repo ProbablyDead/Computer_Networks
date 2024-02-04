@@ -1,8 +1,10 @@
 import java.io.*;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
-import java.util.Scanner;
+
+import javafx.util.Pair;
 
 public class Client {
   // Start console application
@@ -33,6 +35,7 @@ public class Client {
   private static final String PARAMETERS_ERROR = "Invalid parameters (usage java Server.java -h)";
   private static final String[] HELP_OPTION_STRINGS = { "-h", "--help" };
   private static final String[] VERSION_OPTION_STRINGS = { "-v", "--verison" };
+  private static final String FILE_NAME = "results.txt";
   // End of constants section
 
   private static void printUsage() {
@@ -56,7 +59,7 @@ public class Client {
     try {
       port = Integer.valueOf(args[1]);
     } catch (NumberFormatException e) {
-      System.err.println();
+      System.err.println(PORT_ERROR);
       System.exit(0);
     }
 
@@ -85,13 +88,13 @@ public class Client {
 
   private static Socket socket;
   private static BufferedReader in;
-  private static BufferedWriter out;
+  private static PrintWriter out;
 
-  private static String getRandomString(int len) {
+  private static byte[] getRandomBytes(int len) {
     byte[] array = new byte[len];
     new Random().nextBytes(array);
 
-    return new String(array).replace("\n", " ");
+    return array;
   }
 
   public static void main(String[] args) {
@@ -106,29 +109,34 @@ public class Client {
       socket.setTcpNoDelay(tcpNoDelay);
 
       in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-      out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+      out = new PrintWriter(socket.getOutputStream(), true);
+
+      ArrayList<Pair<Integer, Long>> result = new ArrayList<>(m);
 
       for (int k = 0; k < m; k++) {
+        long average = 0;
+        int len = n * k + 8;
+
         for (int i = 0; i < q; i++) {
-          System.out.print("a:");
-          // String j = new Scanner(System.in).nextLine();
-
-          out.write("j" + "\n");
+          out.write(getRandomBytes(len).toString().replace('\n', ' ').length() + "\n");
           out.flush();
+          long start = System.nanoTime();
 
-          // out.write(getRandomString(n * k + 8) + "\n");
-          // out.flush();
+          in.readLine();
 
-          String response = "", s = "";
-          while ((s = in.readLine()) != null) {
-            response += s;
-          }
-          System.out.println(response);
-
+          average += (System.nanoTime() - start);
         }
+
+        average /= q;
+
+        result.add(k, new Pair<>(len, average));
       }
+
+      writeResultsToFile(result, parameters);
+
     } catch (IOException e) {
-      System.err.println(e);
+      System.err.println("No server evoked");
+      System.exit(0);
     } finally {
       try {
         in.close();
@@ -141,5 +149,26 @@ public class Client {
         System.err.println(e);
       }
     }
+  }
+
+  private static void writeResultsToFile(ArrayList<Pair<Integer, Long>> result, int[] parameters) {
+    String parametersString = parameters[0] + "_" + parameters[1] + "_" + parameters[2] + "_";
+    File file = new File(parametersString + FILE_NAME);
+
+    try {
+      FileWriter writer = new FileWriter(file);
+
+      String resultString = "";
+
+      for (Pair<Integer, Long> res : result) {
+        resultString += res.getKey() + "\t" + res.getValue() + "\n";
+      }
+
+      writer.write(resultString);
+      writer.close();
+    } catch (IOException e) {
+      System.out.println("Error while writing to a file");
+    }
+
   }
 }
