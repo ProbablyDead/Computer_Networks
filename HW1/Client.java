@@ -36,6 +36,7 @@ public class Client {
   private static final String[] HELP_OPTION_STRINGS = { "-h", "--help" };
   private static final String[] VERSION_OPTION_STRINGS = { "-v", "--verison" };
   private static final String FILE_NAME = "results.txt";
+  private static final String FILE_PATH = "./local/";
   // End of constants section
 
   private static void printUsage() {
@@ -88,12 +89,19 @@ public class Client {
 
   private static Socket socket;
   private static BufferedReader in;
-  private static PrintWriter out;
+  private static OutputStream out;
 
   private static byte[] getRandomBytes(int len) {
-    byte[] array = new byte[len];
+    byte[] array = new byte[len + 1];
     new Random().nextBytes(array);
 
+    array[len] = 10;
+    for (int i = 0; i < len; i++) {
+      if (array[i] == '\n') {
+        array[i] = ' ';
+      }
+    }
+    System.out.println(array.length);
     return array;
   }
 
@@ -109,7 +117,7 @@ public class Client {
       socket.setTcpNoDelay(tcpNoDelay);
 
       in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-      out = new PrintWriter(socket.getOutputStream(), true);
+      out = socket.getOutputStream();
 
       ArrayList<Pair<Integer, Long>> result = new ArrayList<>(m);
 
@@ -118,7 +126,7 @@ public class Client {
         int len = n * k + 8;
 
         for (int i = 0; i < q; i++) {
-          out.write(getRandomBytes(len).toString().replace('\n', ' ').length() + "\n");
+          out.write(getRandomBytes(len));
           out.flush();
           long start = System.nanoTime();
 
@@ -152,8 +160,10 @@ public class Client {
   }
 
   private static void writeResultsToFile(ArrayList<Pair<Integer, Long>> result, int[] parameters) {
-    String parametersString = parameters[0] + "_" + parameters[1] + "_" + parameters[2] + "_";
-    File file = new File(parametersString + FILE_NAME);
+    String parametersString = parameters[0] + "_" + parameters[1]
+        + "_" + parameters[2] + "_" + tcpNoDelay + "_";
+    String fileName = FILE_PATH + parametersString + FILE_NAME;
+    File file = new File(fileName);
 
     try {
       FileWriter writer = new FileWriter(file);
