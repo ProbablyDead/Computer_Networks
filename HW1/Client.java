@@ -13,9 +13,9 @@ public class Client {
   private static final String VERSION = "Client 1.0.0";
   private static final String USAGE = """
       USAGE:
-        java Client.java <ip> <port> <n> <m> <q> [OPTIONS]
+        java Client.java <ip> <port> <n> <m> <q> <tcp-no-delay> [OPTIONS]
         or
-        javac Client.java && java Client <ip> <port> <n> <m> <q> [OPTIONS]
+        javac Client.java && java Client <ip> <port> <n> <m> <q> <tcp-no-delay> [OPTIONS]
 
       EXAMPLE:
         java Client.java 127.0.0.1 8000
@@ -30,6 +30,7 @@ public class Client {
         n\t Array length in bytes
         m\t Number of iterations
         q\t Number of messages
+        tcp-no-delay\t Boolean(true/false), def=true
                                       """;
   private static final String PORT_ERROR = "Invalid port (usage java Server.java -h)";
   private static final String PARAMETERS_ERROR = "Invalid parameters (usage java Server.java -h)";
@@ -68,9 +69,13 @@ public class Client {
 
     try {
       for (int i = 2; i < args.length; i++) {
-        parameters[i - 2] = Integer.valueOf(args[i]);
-        if (parameters[i - 2] < 0) {
-          throw new NumberFormatException();
+        if ((args[i].equals("true") || args[i].equals("false")) && i == 5) {
+          tcpNoDelay = args[i].equals("true");
+        } else if (i <= 4) {
+          parameters[i - 2] = Integer.valueOf(args[i]);
+          if (parameters[i - 2] < 0) {
+            throw new NumberFormatException();
+          }
         }
       }
     } catch (NumberFormatException e) {
@@ -112,6 +117,7 @@ public class Client {
     int m = parameters[1];
     int q = parameters[2];
 
+    System.out.println(tcpNoDelay);
     try {
       socket = new Socket(ip, port);
       socket.setTcpNoDelay(tcpNoDelay);
