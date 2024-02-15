@@ -1,5 +1,6 @@
 import java.io.*;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -86,6 +87,24 @@ public class Client {
     return parameters;
   }
 
+  private static void printProgressbar(float percentage) {
+    int width = 50;
+
+    System.out.print("\u001b[1F");
+    System.out.flush();
+    System.out.print("[");
+
+    int i = 0;
+    for (; i < (int) (percentage * width); i++) {
+      System.out.print("▮");
+    }
+    for (; i < width; i++) {
+      System.out.print(" ");
+    }
+    System.out.print("]\t");
+    System.out.println(String.format("\t%.2f", percentage * 100) + "%");
+  }
+
   // End console application
   private static boolean tcpNoDelay = true;
 
@@ -97,27 +116,25 @@ public class Client {
   private static OutputStream out;
 
   private static byte[] getRandomBytes(int len) {
-    byte[] array = new byte[len + 1];
-    new Random().nextBytes(array);
+    byte[] array = new byte[len + 4], lenBytes = ByteBuffer.allocate(4).putInt(len).array();
 
-    array[len] = 10;
-    for (int i = 0; i < len; i++) {
-      if (array[i] == '\n') {
-        array[i] = ' ';
-      }
+    new Random().nextBytes(array);
+    for (int i = 0; i < 4; i++) {
+      array[i] = lenBytes[i];
     }
-    System.out.println(array.length);
+
     return array;
   }
 
   public static void main(String[] args) {
     int[] parameters = getParameters(args);
 
+    System.out.println();
+
     int n = parameters[0];
     int m = parameters[1];
     int q = parameters[2];
 
-    System.out.println(tcpNoDelay);
     try {
       socket = new Socket(ip, port);
       socket.setTcpNoDelay(tcpNoDelay);
@@ -127,6 +144,8 @@ public class Client {
 
       ArrayList<Pair<Integer, Long>> result = new ArrayList<>(m);
 
+      float maxIterCount = m * q, curIter = 1;
+
       for (int k = 0; k < m; k++) {
         long average = 0;
         int len = n * k + 8;
@@ -134,11 +153,14 @@ public class Client {
         for (int i = 0; i < q; i++) {
           out.write(getRandomBytes(len));
           out.flush();
+
           long start = System.nanoTime();
 
           in.readLine();
 
           average += (System.nanoTime() - start);
+
+          printProgressbar(curIter++ / maxIterCount);
         }
 
         average /= q;

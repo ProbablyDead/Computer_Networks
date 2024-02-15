@@ -1,6 +1,7 @@
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
@@ -64,7 +65,7 @@ public class Server {
 
   private static ServerSocket server;
   private static Socket clientSocket;
-  private static BufferedReader in;
+  private static InputStream in;
   private static PrintWriter out;
 
   public static void main(String[] args) {
@@ -80,17 +81,33 @@ public class Server {
       clientSocket = server.accept();
 
       try {
-        in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        in = clientSocket.getInputStream();
         out = new PrintWriter(clientSocket.getOutputStream(), true);
 
         // Receive until null
-        String receivedString;
-        while ((receivedString = in.readLine()) != null) {
-          System.out.println("received: " + receivedString.length() + " bytes");
+        byte[] lenBytes = new byte[4];
+        while (true) {
+          int len = 0;
+          while (len != 4) {
+            len += in.read(lenBytes);
+          }
+
+          len = 0;
+          byte[] buffer = new byte[ByteBuffer.wrap(lenBytes).getInt()];
+          while (len != buffer.length) {
+            len += in.read(buffer);
+
+            // in.read();
+            // len++;
+            // System.out.println(len);
+          }
+
+          System.out.println("Received " + len + " bytes");
+
           out.write(LocalDateTime.now().format(dateTimeFormatter) + "\n");
           out.flush();
-        }
 
+        }
       } finally {
         in.close();
         out.close();
