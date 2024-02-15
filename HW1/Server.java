@@ -66,7 +66,7 @@ public class Server {
   private static ServerSocket server;
   private static Socket clientSocket;
   private static InputStream in;
-  private static PrintWriter out;
+  private static OutputStream out;
 
   public static void main(String[] args) {
     int port = getPort(args);
@@ -82,7 +82,7 @@ public class Server {
 
       try {
         in = clientSocket.getInputStream();
-        out = new PrintWriter(clientSocket.getOutputStream(), true);
+        out = clientSocket.getOutputStream();
 
         byte[] lenBytes = new byte[4];
         while (true) {
@@ -114,7 +114,7 @@ public class Server {
 
           System.out.println("Received " + len + " bytes");
 
-          out.write(LocalDateTime.now().format(dateTimeFormatter) + "\n");
+          out.write((LocalDateTime.now().format(dateTimeFormatter)).getBytes());
           out.flush();
         }
       } finally {

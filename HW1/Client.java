@@ -112,7 +112,7 @@ public class Client {
   private static int port;
 
   private static Socket socket;
-  private static BufferedReader in;
+  private static InputStream in;
   private static OutputStream out;
 
   private static byte[] getRandomBytes(int len) {
@@ -139,7 +139,7 @@ public class Client {
       socket = new Socket(ip, port);
       socket.setTcpNoDelay(tcpNoDelay);
 
-      in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+      in = socket.getInputStream();
       out = socket.getOutputStream();
 
       ArrayList<Pair<Integer, Long>> result = new ArrayList<>(m);
@@ -151,12 +151,12 @@ public class Client {
         int len = n * k + 8;
 
         for (int i = 0; i < q; i++) {
+          long start = System.nanoTime();
+
           out.write(getRandomBytes(len));
           out.flush();
 
-          long start = System.nanoTime();
-
-          in.readLine();
+          in.read(new byte[29]);
 
           average += (System.nanoTime() - start);
 
