@@ -84,9 +84,10 @@ public class Server {
         in = clientSocket.getInputStream();
         out = new PrintWriter(clientSocket.getOutputStream(), true);
 
-        // Receive until null
         byte[] lenBytes = new byte[4];
         while (true) {
+          boolean flagToOut = false;
+
           int len = 0;
           while (len != 4) {
             len += in.read(lenBytes);
@@ -95,27 +96,33 @@ public class Server {
           len = 0;
           byte[] buffer = new byte[ByteBuffer.wrap(lenBytes).getInt()];
           while (len != buffer.length) {
-            len += in.read(buffer);
+            int readBytesCount = in.read(buffer);
+            System.out.println(readBytesCount);
 
-            // in.read();
-            // len++;
-            // System.out.println(len);
+            // Receive until end of stream
+            if (readBytesCount == -1) {
+              flagToOut = true;
+              break;
+            }
+
+            len += readBytesCount;
+          }
+
+          if (flagToOut) {
+            break;
           }
 
           System.out.println("Received " + len + " bytes");
 
           out.write(LocalDateTime.now().format(dateTimeFormatter) + "\n");
           out.flush();
-
         }
       } finally {
         in.close();
         out.close();
         clientSocket.close();
       }
-    } catch (
-
-    IOException e) {
+    } catch (IOException e) {
       System.err.println("Port already in use");
       System.exit(0);
     } finally {
