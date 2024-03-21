@@ -17,7 +17,7 @@ public class App {
         String options = "";
 
         options += "Application options:\n";
-        options += "\t1. Print all ARP packets\t(use <Ctrl-c> to stop),\n";
+        options += "\t1. Print all captured ARP packets\t(use <Ctrl-c> to stop),\n";
         options += "\t2. Get MAC address by IP,\n";
         options += "\t3. Get statistics,\n";
         options += "\t4. Check for the same IP in the network\n";
@@ -41,14 +41,22 @@ public class App {
                 try {pcap.printMACbyIP(in_.next()); } 
                 catch (Exception e) {
                     System.out.println("Error");
-                    in_.close();
-                    return; 
                 }
 
                 in_.close();
             },
 
-            "3", () -> { },
+            "3", () -> { 
+                System.out.print("\nEnter time (in ms) for you'd like to collect the statistics: \t");
+
+                Scanner in_ = new Scanner(System.in);
+                try {
+                    pcap.printStatistic(in_.nextLong());
+                } catch (Exception e) {
+                    System.out.println("Error");
+                }
+                in_.close();
+            },
 
             "4", () -> { }
             );
