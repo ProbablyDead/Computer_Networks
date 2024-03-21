@@ -1,34 +1,82 @@
 package com.ilyavol.app;
 
 import org.pcap4j.core.*;
-import org.pcap4j.packet.ArpPacket;
-import org.pcap4j.packet.Packet;
+
 import java.io.EOFException;
-import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.concurrent.TimeoutException;
 
+import java.util.Map;
+import java.util.Scanner;
+
 public class App {
-  public static void main(String args[]) throws UnknownHostException,
-         PcapNativeException, EOFException, TimeoutException, NotOpenException {
-           InetAddress addr = InetAddress.getByName("82.204.197.198");
-           PcapNetworkInterface nif = Pcaps.getDevByAddress(addr);
+    private final static String IP = "10.255.197.37";
+    private final static String MAC = "3c:a6:f6:12:86:a1";
 
-           int snapLen = 65536;
+    private static void printOptions() {
+        String options = "";
 
-           PcapNetworkInterface.PromiscuousMode mode =
-             PcapNetworkInterface.PromiscuousMode.PROMISCUOUS;
+        options += "Application options:\n";
+        options += "\t1. Print all ARP packets\t(use <Ctrl-c> to stop),\n";
+        options += "\t2. Get MAC address by IP,\n";
+        options += "\t3. Get statistics,\n";
+        options += "\t4. Check for the same IP in the network\n";
 
-           int timeout = 10000;
+        System.out.println(options);
+    }
+    private final static PcapARP pcap = new PcapARP(IP, MAC);
 
-           PcapHandle handle = nif.openLive(snapLen, mode, timeout);
+    private final static Map<String, Runnable> options = Map.of(
+            "1", () -> {
+                try { pcap.printAllARPs(); } 
+                catch (Exception e) { 
+                    System.out.println("No such ip: " + IP); 
+                }
+            },
 
-           while(true) {
-             Packet packet = handle.getNextPacketEx();
-             ArpPacket arpPacket = packet.get(ArpPacket.class);
-             if(arpPacket !=null) {
-               System.out.println(arpPacket);
-             }
-           }
-  }
+            "2", () -> { 
+                System.out.print("\nEnter devise IP:\t");
+                Scanner in_ = new Scanner(System.in);
+
+                try {pcap.printMACbyIP(in_.next()); } 
+                catch (Exception e) {
+                    System.out.println("Error");
+                    in_.close();
+                    return; 
+                }
+
+                in_.close();
+            },
+
+            "3", () -> { },
+
+            "4", () -> { }
+            );
+
+    private static void switchOptions (String option) {
+        Runnable exec = options.get(option);
+        
+        if (exec == null) {
+            System.out.println("No such option!");
+            return;
+        }
+
+        System.out.println("Loading...");
+
+        exec.run();
+    }
+    
+    public static void main(String args[]) 
+            throws UnknownHostException, PcapNativeException, 
+           EOFException, TimeoutException, NotOpenException {
+        printOptions();
+
+        Scanner in = new Scanner(System.in);
+
+        System.out.print("Select option number:\t");
+
+        switchOptions(in.next());
+
+        in.close();
+    }
 }
