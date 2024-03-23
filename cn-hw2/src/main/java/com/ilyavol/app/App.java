@@ -21,6 +21,7 @@ public class App {
         options += "\t2. Get MAC address by IP,\n";
         options += "\t3. Get statistics,\n";
         options += "\t4. Check for the same IP in the network\n";
+        options += "\t5. Fifth\n";
 
         System.out.println(options);
     }
@@ -38,7 +39,11 @@ public class App {
                 System.out.print("\nEnter devise IP:\t");
                 Scanner in_ = new Scanner(System.in);
 
-                try {pcap.printMACbyIP(in_.next()); } 
+                try {
+                    String ip = in_.next();
+                    String mac = pcap.getMACbyIP(ip); 
+                    System.out.println(mac != "" ? "For ip: " + ip + "\nFound mac address:\t"+ mac : "No such devise");
+                } 
                 catch (Exception e) {
                     System.out.println("Error");
                 }
@@ -58,7 +63,14 @@ public class App {
                 in_.close();
             },
 
-            "4", () -> { }
+            "4", () -> {
+                try {
+                    pcap.checkdeviceIP();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            },
+            "5", () -> { }
             );
 
     private static void switchOptions (String option) {
