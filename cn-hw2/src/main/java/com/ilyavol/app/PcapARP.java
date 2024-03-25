@@ -1,47 +1,56 @@
 package com.ilyavol.app;
 
-import org.pcap4j.core.*;
-import org.pcap4j.packet.ArpPacket;
-import org.pcap4j.packet.Packet;
-import org.pcap4j.packet.EthernetPacket;
-import org.pcap4j.packet.namednumber.ArpOperation;
-import org.pcap4j.packet.namednumber.ArpHardwareType;
-import org.pcap4j.packet.namednumber.EtherType;
-
-import org.pcap4j.util.MacAddress;
-import org.pcap4j.util.ByteArrays;
-
+import java.io.EOFException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.io.EOFException;
-import java.util.concurrent.TimeoutException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
+
+import org.pcap4j.core.NotOpenException;
+import org.pcap4j.core.PcapHandle;
+import org.pcap4j.core.PcapNativeException;
+import org.pcap4j.core.PcapNetworkInterface;
+import org.pcap4j.core.Pcaps;
+import org.pcap4j.packet.ArpPacket;
+import org.pcap4j.packet.EthernetPacket;
+import org.pcap4j.packet.Packet;
+import org.pcap4j.packet.namednumber.ArpHardwareType;
+import org.pcap4j.packet.namednumber.ArpOperation;
+import org.pcap4j.packet.namednumber.EtherType;
+import org.pcap4j.util.ByteArrays;
+import org.pcap4j.util.MacAddress;
 
 public class PcapARP {
-    private final String hostIP;
-    private final MacAddress thisMAC;
-    private final int timeout = 60000; 
-    private final int snapLen = 65536;
-    private final PcapNetworkInterface.PromiscuousMode mode =
+    private static MacAddress resolvedAddr;
+    private final InetAddress IP;
+    private final MacAddress MAC; 
+    private final int TIMEOUT = 60000;
+    private final int SNAP_LEN = 65536;
+
+    private final PcapNetworkInterface.PromiscuousMode MODE =
         PcapNetworkInterface.PromiscuousMode.PROMISCUOUS;
 
-    private static MacAddress resolvedAddr;
-
-    PcapARP(String ip, String mac) {
-        this.hostIP  = ip;
-        this.thisMAC  = MacAddress.getByName(mac);
+    PcapARP(String ip, String mac) throws UnknownHostException {
+        this.IP  = InetAddress.getByName(ip);
+        this.MAC  = MacAddress.getByName(mac);
     }
 
-    // 1: Print all captured ARP packets
+    /**
+     * 1) Print all captured ARP packets
+     * @throws UnknownHostException
+     * @throws PcapNativeException
+     * @throws EOFException
+     * @throws TimeoutException
+     * @throws NotOpenException
+     */
     public void printAllARPs() throws UnknownHostException, PcapNativeException, 
            EOFException, TimeoutException, NotOpenException {
-               InetAddress addr = InetAddress.getByName(this.hostIP);
-               PcapNetworkInterface nif = Pcaps.getDevByAddress(addr);
+               PcapNetworkInterface nif = Pcaps.getDevByAddress(this.IP);
 
-               PcapHandle handle = nif.openLive(this.snapLen, this.mode, this.timeout);
+               PcapHandle handle = nif.openLive(this.SNAP_LEN, this.MODE, this.TIMEOUT);
 
                while(true) {
                    Packet packet = handle.getNextPacketEx();
@@ -52,51 +61,37 @@ public class PcapARP {
                }
     }
 
-    // 2: Print MAC address of device in network by IP
+    /**
+     * 2) Return Mac address by ip address
+     * @param ip Ip for mac address search
+     * @return Mac address or null, if not found
+     * @throws UnknownHostException
+     * @throws PcapNativeException
+     * @throws EOFException
+     * @throws TimeoutException
+     * @throws NotOpenException
+     */
     public String getMACbyIP(String ip) throws UnknownHostException, PcapNativeException, 
            EOFException, TimeoutException, NotOpenException {
-               InetAddress addr = InetAddress.getByName(this.hostIP);
-               PcapNetworkInterface nif = Pcaps.getDevByAddress(addr);
-
-               PcapHandle handle = nif.openLive(this.snapLen, this.mode, this.timeout);
-               PcapHandle sendHandle = nif.openLive(this.snapLen, this.mode, this.timeout);
-
                InetAddress dest_ip = InetAddress.getByName(ip);
 
-               ArpPacket.Builder arpBuilder = new ArpPacket.Builder();
-               try {
-                   arpBuilder
-                       .hardwareType(ArpHardwareType.ETHERNET)
-                       .protocolType(EtherType.IPV4)
-                       .hardwareAddrLength((byte) MacAddress.SIZE_IN_BYTES)
-                       .protocolAddrLength((byte) ByteArrays.INET4_ADDRESS_SIZE_IN_BYTES)
-                       .operation(ArpOperation.REQUEST)
-                       .srcHardwareAddr(this.thisMAC)
-                       .srcProtocolAddr(InetAddress.getByName(this.hostIP))
-                       .dstHardwareAddr(MacAddress.ETHER_BROADCAST_ADDRESS)
-                       .dstProtocolAddr(dest_ip);
-               } catch (UnknownHostException e) {
-                   throw new IllegalArgumentException(e);
-               }
+               PcapNetworkInterface nif = Pcaps.getDevByAddress(this.IP);
 
-               EthernetPacket.Builder etherBuilder = new EthernetPacket.Builder();
-               etherBuilder
-                   .dstAddr(MacAddress.ETHER_BROADCAST_ADDRESS)
-                   .srcAddr(thisMAC)
-                   .type(EtherType.ARP)
-                   .payloadBuilder(arpBuilder)
-                   .paddingAtBuild(true);
+               PcapHandle handle = nif.openLive(this.SNAP_LEN, this.MODE, this.TIMEOUT);
+               PcapHandle sendHandle = nif.openLive(this.SNAP_LEN, this.MODE, this.TIMEOUT);
 
-               Packet p = etherBuilder.build();
-               // System.out.println(p);
-               sendHandle.sendPacket(p);
+               sendHandle.sendPacket(this.buildArpPacket(
+                           ArpOperation.REQUEST,
+                           this.MAC,
+                           this.IP, 
+                           MacAddress.ETHER_BROADCAST_ADDRESS,
+                           dest_ip));
 
                long start = System.currentTimeMillis();
-               long end = start + this.timeout; // delay 
+               long end = start + this.TIMEOUT; // Delay 
 
-               System.out.println("Searching...\nTime limit is: " + this.timeout + " ms\n");
+               System.out.println("Searching...\nTime limit is: " + this.TIMEOUT + " ms\n");
                while(System.currentTimeMillis() < end) {
-
                    Packet packet = handle.getNextPacketEx();
                    ArpPacket arpPacket = packet.get(ArpPacket.class);
 
@@ -106,19 +101,25 @@ public class PcapARP {
                        PcapARP.resolvedAddr = arpPacket.getHeader().getSrcHardwareAddr();
                        break;
                            }
-
                }
 
-               return PcapARP.resolvedAddr != null ? PcapARP.resolvedAddr.toString() : "";
+               return PcapARP.resolvedAddr != null ? PcapARP.resolvedAddr.toString() : null;
     }
 
-    // 3: Print statistic
+    /**
+     * 3) Print stastic
+     * @param TimeMS Delay (ms.)
+     * @throws UnknownHostException
+     * @throws PcapNativeException
+     * @throws EOFException
+     * @throws TimeoutException
+     * @throws NotOpenException
+     */
     public void printStatistic(long TimeMS) throws UnknownHostException, PcapNativeException, 
            EOFException, TimeoutException, NotOpenException {
-               InetAddress addr = InetAddress.getByName(this.hostIP);
-               PcapNetworkInterface nif = Pcaps.getDevByAddress(addr);
+               PcapNetworkInterface nif = Pcaps.getDevByAddress(this.IP);
 
-               PcapHandle handle = nif.openLive(this.snapLen, this.mode, (int)TimeMS);
+               PcapHandle handle = nif.openLive(this.SNAP_LEN, this.MODE, (int)TimeMS);
 
                long ethernetCount = 0,
                     arpCount = 0,
@@ -139,7 +140,7 @@ public class PcapARP {
                while (System.currentTimeMillis() < end) {
                    Packet packet = handle.getNextPacketEx();
 
-                   if (!flag) { // delay 
+                   if (!flag) { // Delay 
                        long start = System.currentTimeMillis();
                        end = start + TimeMS; 
                        flag = true;
@@ -153,8 +154,7 @@ public class PcapARP {
 
                    // Data size
                    dataSizeInBytes += ethernetPacket.length() - 18; // 18 = header (14 bytes) + checksum(4 bytes)
-                                                                    // i hope this is what You asked for :)
-                   
+                                                                    // I hope this is what You asked for :)
 
                    // Ethernet frames count 
                    ethernetCount++;
@@ -169,10 +169,10 @@ public class PcapARP {
                    String key = (cond ? srcStr : dstStr) + " / " + (!cond ? srcStr : dstStr);
                    pairOfMacs.put(key, pairOfMacs.getOrDefault(key, 0) + 1);
 
-                   if (header.getDstAddr().equals(this.thisMAC)) {
+                   if (header.getDstAddr().equals(this.MAC)) {
                        // Ethernet frames to me  
                        ethernetToMe++;
-                   } else if (!header.getSrcAddr().equals(this.thisMAC)) {
+                   } else if (!header.getSrcAddr().equals(this.MAC)) {
                        // Ethernet frames not from and to me  
                        ethernetNOTMe++;
                    }
@@ -188,7 +188,7 @@ public class PcapARP {
                        arpCount++;
 
                        ArpPacket.ArpHeader arpHeader = ethernetPacket.get(ArpPacket.class).getHeader();
-                       if (arpHeader.getDstProtocolAddr().equals(addr)) {
+                       if (arpHeader.getDstProtocolAddr().equals(this.IP)) {
                            // ARP to me packets count
                            arpToMe++;
                        }
@@ -216,56 +216,42 @@ public class PcapARP {
                    .forEach((val) -> {
                        System.out.println("\t" + val.getKey() + " = " + val.getValue());
                    });
+               System.out.println();
     }
 
-    // 4: Check if the IP address is in use
-    public void checkdeviceIP() throws UnknownHostException, PcapNativeException, 
+    /**
+     * 4) Check if the ip address is in use by another device in the same network
+     * @return
+     * @throws UnknownHostException
+     * @throws PcapNativeException
+     * @throws EOFException
+     * @throws TimeoutException
+     * @throws NotOpenException
+     */
+    public String getDuplicateIP() throws UnknownHostException, PcapNativeException, 
            EOFException, TimeoutException, NotOpenException {
-               InetAddress addr = InetAddress.getByName(this.hostIP);
-               PcapNetworkInterface nif = Pcaps.getDevByAddress(addr);
+               PcapNetworkInterface nif = Pcaps.getDevByAddress(this.IP);
 
-               PcapHandle sendHandle = nif.openLive(this.snapLen, this.mode, this.timeout);
-               PcapHandle handle = nif.openLive(this.snapLen, this.mode, this.timeout);
+               MacAddress macToCheck = this.MAC;
+               InetAddress ipToCheck = this.IP;
+               // InetAddress ipToCheck = InetAddress.getByName("10.255.197.181"); // Test
 
-               // InetAddress thisIp = InetAddress.getByName("10.255.196.222"); // test 
-               InetAddress thisIp = InetAddress.getByName(this.hostIP); 
+               PcapHandle sendHandle = nif.openLive(this.SNAP_LEN, this.MODE, this.TIMEOUT);
+               PcapHandle handle = nif.openLive(this.SNAP_LEN, this.MODE, this.TIMEOUT);
 
-               ArpPacket.Builder arpBuilder = new ArpPacket.Builder();
-               try { // Gratuation request requires destination mac addresses (arp and ethernet) to be
-                     // broadcasts and source and the destination IP protocols must be both of the sender's.
-                     // As I read on Wiki, Gratuation message might be either request or reply,
-                     // but request is preferred.
-                   arpBuilder
-                       .hardwareType(ArpHardwareType.ETHERNET)
-                       .protocolType(EtherType.IPV4)
-                       .hardwareAddrLength((byte) MacAddress.SIZE_IN_BYTES)
-                       .protocolAddrLength((byte) ByteArrays.INET4_ADDRESS_SIZE_IN_BYTES)
-                       .operation(ArpOperation.REQUEST) 
-                       .srcHardwareAddr(this.thisMAC)
-                       .srcProtocolAddr(thisIp)
-                       .dstHardwareAddr(MacAddress.ETHER_BROADCAST_ADDRESS)
-                       .dstProtocolAddr(thisIp);
-               } catch (Exception e) {
-                   throw new IllegalArgumentException(e);
-               }
+               sendHandle.sendPacket(
+                       this.buildArpPacket(ArpOperation.REQUEST, 
+                           macToCheck, 
+                           ipToCheck, 
+                           MacAddress.ETHER_BROADCAST_ADDRESS, 
+                           ipToCheck)
+                       );
 
-               EthernetPacket.Builder etherBuilder = new EthernetPacket.Builder();
-               etherBuilder
-                   .dstAddr(MacAddress.ETHER_BROADCAST_ADDRESS)
-                   .srcAddr(thisMAC)
-                   .type(EtherType.ARP)
-                   .payloadBuilder(arpBuilder)
-                   .paddingAtBuild(true);
-
-               Packet p = etherBuilder.build();
-               // System.out.println(p);
-               sendHandle.sendPacket(p);
-
-               System.out.println("Searching...\nTime limit is: " + this.timeout + " ms\n");
+               System.out.println("Searching...\nTime limit is: " + this.TIMEOUT + " ms\n");
 
                long start = System.currentTimeMillis();
-               long end = start + this.timeout; // delay 
-                                                //
+               long end = start + this.TIMEOUT; // Delay 
+
                while(System.currentTimeMillis() < end) {
 
                    Packet packet = handle.getNextPacketEx();
@@ -274,24 +260,93 @@ public class PcapARP {
                    if (arpPacket == null) { continue; }
 
                    ArpPacket.ArpHeader header = arpPacket.getHeader();
-                   
-                   // if we get some arp reply, that contains
+
+                   // If we get some arp reply, that contains
                    // equal source and destination ips with different mac addresses,
                    // then this an ip collision (example is in docs)
                    if(header.getOperation().equals(ArpOperation.REPLY) 
-                           && header.getSrcProtocolAddr().equals(thisIp)
-                           && header.getDstProtocolAddr().equals(thisIp)
-                           && !header.getDstHardwareAddr().equals(header.getSrcHardwareAddr()))
+                           && header.getSrcProtocolAddr().equals(ipToCheck)
+                           && header.getDstProtocolAddr().equals(ipToCheck)
+                           && header.getDstHardwareAddr().equals(macToCheck)
+                           && !this.MAC.equals(header.getSrcHardwareAddr()))
                    {
-
-                       System.out.println("Found duplicate IP with MAC:\t" + header.getSrcHardwareAddr());
-                       return;
+                       return header.getSrcHardwareAddr().toString();
                    }
                }
-               System.out.println("No duplicate ip");
+               return null;
     }
 
+    /**
+     * 5) Send targeted arp messages
+     * @throws PcapNativeException
+     * @throws NotOpenException
+     */
+    public void sendTargetedMessages () throws PcapNativeException, NotOpenException {
+        PcapNetworkInterface nif = Pcaps.getDevByAddress(this.IP);
+
+        PcapHandle handle = nif.openLive(this.SNAP_LEN, this.MODE, this.TIMEOUT);
+
+        InetAddress ipTo;
+		try {
+			ipTo = InetAddress.getByName("10.255.197.20"); // Test
+		} catch (UnknownHostException e) {
+            System.out.println("No such ip");
+            return;
+		} 
+        MacAddress macTo = MacAddress.getByName("70:89:76:9d:92:c2"); // Test
+
+        handle.sendPacket( // Arp targeted request
+                this.buildArpPacket(
+                    ArpOperation.REQUEST,
+                    this.MAC, 
+                    this.IP,
+                    macTo,
+                    ipTo)
+                );
+
+        handle.sendPacket( // Arp targeted reply
+                this.buildArpPacket(
+                    ArpOperation.REPLY,
+                    this.MAC, 
+                    this.IP,
+                    macTo,
+                    ipTo)
+                );
+
+        System.out.println("Complete!");
+    }
+
+    /** Build arp packet
+     * @param operation Arp operation
+     * @param srcMac Source MAC address
+     * @param srcIp Source IP address
+     * @param dstMac Destination MAC address
+     * @param dstIp Destination IP address
+     * @return Ready to send ethernet packet 
+     */
+    private Packet buildArpPacket (ArpOperation operation, 
+            MacAddress srcMac, InetAddress srcIp, MacAddress dstMac, InetAddress dstIp) {
+        ArpPacket.Builder arpBuilder = new ArpPacket.Builder();
+        arpBuilder
+            .hardwareType(ArpHardwareType.ETHERNET)
+            .protocolType(EtherType.IPV4)
+            .hardwareAddrLength((byte) MacAddress.SIZE_IN_BYTES)
+            .protocolAddrLength((byte) ByteArrays.INET4_ADDRESS_SIZE_IN_BYTES)
+            .operation(operation)
+            .srcHardwareAddr(srcMac)
+            .srcProtocolAddr(srcIp)
+            .dstHardwareAddr(dstMac)
+            .dstProtocolAddr(dstIp);
+
+        EthernetPacket.Builder etherBuilder = new EthernetPacket.Builder();
+        etherBuilder
+            .dstAddr(dstMac)
+            .srcAddr(srcMac)
+            .type(EtherType.ARP)
+            .payloadBuilder(arpBuilder)
+            .paddingAtBuild(true);
+
+        return etherBuilder.build();
+    }
 }
-
-
 

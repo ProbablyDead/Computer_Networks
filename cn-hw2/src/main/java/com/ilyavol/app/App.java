@@ -1,31 +1,13 @@
 package com.ilyavol.app;
 
-import org.pcap4j.core.*;
-
-import java.io.EOFException;
-import java.net.UnknownHostException;
-import java.util.concurrent.TimeoutException;
-
 import java.util.Map;
 import java.util.Scanner;
 
 public class App {
-    private final static String IP = "10.255.197.37";
+    private final static String IP = "10.255.196.224";
     private final static String MAC = "3c:a6:f6:12:86:a1";
 
-    private static void printOptions() {
-        String options = "";
-
-        options += "Application options:\n";
-        options += "\t1. Print all captured ARP packets\t(use <Ctrl-c> to stop),\n";
-        options += "\t2. Get MAC address by IP,\n";
-        options += "\t3. Get statistics,\n";
-        options += "\t4. Check for the same IP in the network\n";
-        options += "\t5. Fifth\n";
-
-        System.out.println(options);
-    }
-    private final static PcapARP pcap = new PcapARP(IP, MAC);
+    private static PcapARP pcap = null;
 
     private final static Map<String, Runnable> options = Map.of(
             "1", () -> {
@@ -42,10 +24,10 @@ public class App {
                 try {
                     String ip = in_.next();
                     String mac = pcap.getMACbyIP(ip); 
-                    System.out.println(mac != "" ? "For ip: " + ip + "\nFound mac address:\t"+ mac : "No such devise");
+                    System.out.println(mac != null ? "For ip: " + ip + "\nFound mac address:\t"+ mac : "No such devise");
                 } 
                 catch (Exception e) {
-                    System.out.println("Error");
+                    e.printStackTrace();
                 }
 
                 in_.close();
@@ -58,21 +40,62 @@ public class App {
                 try {
                     pcap.printStatistic(in_.nextLong());
                 } catch (Exception e) {
-                    System.out.println("Error");
+                    e.printStackTrace();
                 }
                 in_.close();
             },
 
             "4", () -> {
                 try {
-                    pcap.checkdeviceIP();
+                    String result = pcap.getDuplicateIP();
+
+                    System.out.println(result != null ?
+                            "Found duplicate ip at mac:\t" + result :
+                            "No duplicate ip");
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             },
-            "5", () -> { }
-            );
+            "5", () -> {
+                try {
+                    pcap.sendTargetedMessages();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+    );
 
+    public static void main(String args[]) {
+        printOptions();
+
+        try {
+            pcap = new PcapARP(IP, MAC);
+        } catch (Exception e) {
+            System.out.println("Check hardcoded IP and MAC");
+        }
+
+        Scanner in = new Scanner(System.in);
+
+        System.out.print("Select option number:\t");
+
+        switchOptions(in.next());
+
+        in.close();
+    }
+
+    private static void printOptions() {
+        String options = "";
+
+        options += "Application options:\n";
+        options += "\t1. Print all captured ARP packets\t(use <Ctrl-c> to stop),\n";
+        options += "\t2. Get MAC address by IP,\n";
+        options += "\t3. Get statistics,\n";
+        options += "\t4. Check for the same IP in the network\n";
+        options += "\t5. Targeted arp messages\n";
+
+        System.out.println(options);
+    }
+    
     private static void switchOptions (String option) {
         Runnable exec = options.get(option);
         
@@ -84,19 +107,5 @@ public class App {
         System.out.println("Loading...");
 
         exec.run();
-    }
-    
-    public static void main(String args[]) 
-            throws UnknownHostException, PcapNativeException, 
-           EOFException, TimeoutException, NotOpenException {
-        printOptions();
-
-        Scanner in = new Scanner(System.in);
-
-        System.out.print("Select option number:\t");
-
-        switchOptions(in.next());
-
-        in.close();
     }
 }
